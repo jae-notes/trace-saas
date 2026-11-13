@@ -39,3 +39,16 @@ cd trace-saas
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+#### 3. Run TRACE
+```bash
+uvicorn main:app --reload
+```
+Open **`http://127.0.0.1:8000`** in your browser and drag & drop your bank statement `.CSV` files.
+
+---
+
+### License
+
+MIT License. Free to use, modify, and self-host.
