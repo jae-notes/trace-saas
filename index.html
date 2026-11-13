@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TRACE — Minimalist Subscription Detector</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+      background-color: #050505;
+      color: #f5f5f7;
+      overflow-x: hidden;
+    }
+
+    .liquid-glass {
+      background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.09) 0%,
+        rgba(255, 255, 255, 0.02) 100%
+      );
+      backdrop-filter: blur(28px) saturate(140%);
+      -webkit-backdrop-filter: blur(28px) saturate(140%);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 
+        0 30px 60px -15px rgba(0, 0, 0, 0.85),
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.28);
+    }
+
+    .liquid-glass-modal {
+      background: linear-gradient(
+        145deg,
+        rgba(26, 26, 28, 0.92) 0%,
+        rgba(12, 12, 14, 0.96) 100%
+      );
+      backdrop-filter: blur(36px) saturate(160%);
+      -webkit-backdrop-filter: blur(36px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: 
+        0 40px 80px -20px rgba(0, 0, 0, 0.95),
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.3);
+    }
+
+    .liquid-glass-sub {
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      backdrop-filter: blur(16px);
+    }
+
+    .liquid-glass-inner {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }
+
+    .liquid-glass-inner:hover,
+    .liquid-glass-inner.drag-active {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.6);
+      transform: scale(1.005);
+    }
+
+    .ambient-orb-1 {
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0) 70%);
+    }
+    .ambient-orb-2 {
+      background: radial-gradient(circle, rgba(160, 160, 170, 0.11) 0%, rgba(0, 0, 0, 0) 70%);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between items-center relative selection:bg-white selection:text-black">
+
+  <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+    <div class="ambient-orb-1 w-[520px] h-[520px] rounded-full absolute -top-24 -left-24 blur-2xl"></div>
+    <div class="ambient-orb-2 w-[600px] h-[600px] rounded-full absolute bottom-[-150px] right-[-100px] blur-3xl"></div>
+  </div>
+
+  <header class="w-full max-w-4xl px-6 py-8 flex justify-between items-center z-10">
+    <div class="flex items-center space-x-2.5">
+      <div class="w-2.5 h-2.5 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
+      <span class="text-sm font-semibold tracking-[0.22em] uppercase text-white">Trace</span>
+    </div>
+    <span class="text-xs text-neutral-400 tracking-wide border border-white/10 px-3 py-1 rounded-full bg-white/[0.03]">
+      Local AI · Zero Bank Login
+    </span>
+  </header>
+
+  <main id="main-container" class="w-full max-w-xl transition-all duration-500 px-6 z-10 my-auto">
+    <div class="text-center mb-10">
+      <h1 class="text-3xl sm:text-4xl font-medium tracking-tight text-white mb-3">
+        Find what quietly drains you.
+      </h1>
+      <p class="text-sm sm:text-base text-neutral-400 font-light max-w-md mx-auto leading-relaxed">
+        Drop one or multiple bank statement CSVs. Our local intelligence isolates recurring subscriptions and hidden price hikes without linking your accounts.
+      </p>
+    </div>
+
+    <div class="liquid-glass rounded-3xl p-6 sm:p-8">
+      <div id="drop-zone" class="liquid-glass-inner rounded-2xl p-10 text-center cursor-pointer relative">
+        <input type="file" id="file-input" accept=".csv" multiple class="hidden" />
+        
+        <div id="upload-prompt" class="flex flex-col items-center">
+          <div class="w-12 h-12 rounded-2xl bg-white/[0.07] border border-white/15 flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+            </svg>
+          </div>
+          <p class="text-sm font-medium text-white mb-1">
+            Click to upload or drag & drop
+          </p>
+          <p class="text-xs text-neutral-500">
+            Up to 36 CSV files per scan (3 years of bank & card statements)
+          </p>
+        </div>
+
+        <div id="file-selected" class="hidden flex-col items-center">
+          <div class="w-12 h-12 rounded-2xl bg-white text-black flex items-center justify-center mb-3 shadow-lg">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <p id="file-name" class="text-sm font-medium text-white truncate max-w-xs"></p>
+          <p id="file-size" class="text-xs text-neutral-400 mt-0.5 mb-3 truncate max-w-sm"></p>
+          <button type="button" id="remove-file" class="text-xs text-neutral-400 hover:text-white underline underline-offset-4 transition">
+            Clear files
+          </button>
+        </div>
+      </div>
+
+      <button id="analyze-btn" disabled class="mt-6 w-full py-3.5 px-6 rounded-xl font-medium text-sm transition-all duration-300 bg-white/10 text-neutral-500 cursor-not-allowed">
+        Select CSV files to analyze
+      </button>
+
+      <div id="status-box" class="hidden mt-4 p-3.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs text-neutral-300 text-center">
+      </div>
+    </div>
+
+    <!-- AI 분석 결과 대시보드 -->
+    <div id="results-section" class="hidden mt-8 space-y-6">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="liquid-glass-sub rounded-2xl p-5">
+          <p class="text-xs text-neutral-400 uppercase tracking-wider mb-1">Monthly Drain</p>
+          <p id="metric-monthly" class="text-2xl font-semibold text-white">$0.00</p>
+          <p class="text-[11px] text-neutral-500 mt-1">Normalized recurring rate</p>
+        </div>
+        <div class="liquid-glass-sub rounded-2xl p-5">
+          <p class="text-xs text-neutral-400 uppercase tracking-wider mb-1">Annualized</p>
+          <p id="metric-annual" class="text-2xl font-semibold text-white">$0.00</p>
+          <p class="text-[11px] text-neutral-500 mt-1">Projected 12-month outflow</p>
+        </div>
+        <div class="liquid-glass-sub rounded-2xl p-5">
+          <p class="text-xs text-neutral-400 uppercase tracking-wider mb-1">Price Hikes</p>
+          <p id="metric-hikes" class="text-2xl font-semibold text-white">0</p>
+          <p id="metric-hike-extra" class="text-[11px] text-neutral-400 mt-1">No stealth increases found</p>
+        </div>
+      </div>
+
+      <div class="liquid-glass rounded-3xl p-6 sm:p-8">
+        <div class="flex justify-between items-center mb-5">
+          <h2 class="text-sm font-semibold uppercase tracking-widest text-neutral-300">Detected Recurring Charges</h2>
+          <span id="sub-count-badge" class="text-xs text-neutral-400 bg-white/[0.06] px-2.5 py-1 rounded-full">0 items</span>
+        </div>
+        <div id="subscriptions-list" class="divide-y divide-white/10">
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 4단계: 원클릭 해지 및 협상 메일 모달 -->
+  <div id="email-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+    <div class="liquid-glass-modal w-full max-w-lg rounded-3xl p-6 sm:p-7 relative">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <p class="text-[11px] uppercase tracking-widest text-neutral-400 mb-1">Local AI Action Draft</p>
+          <h3 id="modal-title" class="text-lg font-medium text-white">Cancel Subscription</h3>
+        </div>
+        <button id="close-modal-btn" class="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.14] text-neutral-300 hover:text-white flex items-center justify-center transition">
+          ✕
+        </button>
+      </div>
+
+      <!-- 모드 전환 탭 (요금 인상 항목인 경우 표시) -->
+      <div id="modal-tabs" class="hidden grid-cols-2 gap-2 p-1 rounded-xl bg-white/[0.04] border border-white/10 mb-4">
+        <button type="button" id="tab-negotiate" class="py-1.5 text-xs font-medium rounded-lg transition">
+          Negotiate Rate
+        </button>
+        <button type="button" id="tab-cancel" class="py-1.5 text-xs font-medium rounded-lg transition">
+          Cancel Subscription
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-[11px] uppercase tracking-wider text-neutral-400 mb-1">Subject</label>
+          <input id="email-subject" type="text" class="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.05] border border-white/12 text-xs text-white focus:outline-none focus:border-white/40" />
+        </div>
+        <div>
+          <label class="block text-[11px] uppercase tracking-wider text-neutral-400 mb-1">Message Body (Editable)</label>
+          <textarea id="email-body" rows="8" class="w-full p-3.5 rounded-xl bg-white/[0.05] border border-white/12 text-xs text-neutral-200 leading-relaxed focus:outline-none focus:border-white/40 resize-none"></textarea>
+        </div>
+      </div>
+
+      <div class="mt-5 flex flex-col sm:flex-row gap-2.5">
+        <button id="copy-email-btn" class="flex-1 py-3 px-4 rounded-xl bg-white text-black font-medium text-xs hover:bg-neutral-200 transition shadow-[0_0_20px_rgba(255,255,255,0.2)]">
+          Copy Email
+        </button>
+        <a id="mailto-btn" href="#" class="flex-1 py-3 px-4 rounded-xl bg-white/[0.08] border border-white/15 text-white font-medium text-xs hover:bg-white/[0.15] transition text-center">
+          Open in Mail App
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <footer class="w-full max-w-4xl px-6 py-8 text-center z-10">
+    <p class="text-[11px] text-neutral-600 tracking-wide">
+      Processed privately in memory. Your financial records never leave your machine.
+    </p>
+  </footer>
+
+  <script>
+    const MAX_FILES = 36;
+    const mainContainer = document.getElementById('main-container');
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const uploadPrompt = document.getElementById('upload-prompt');
+    const fileSelected = document.getElementById('file-selected');
+    const fileNameDisplay = document.getElementById('file-name');
+    const fileSizeDisplay = document.getElementById('file-size');
+    const removeFileBtn = document.getElementById('remove-file');
+    const analyzeBtn = document.getElementById('analyze-btn');
+    const statusBox = document.getElementById('status-box');
+    const resultsSection = document.getElementById('results-section');
+    const subscriptionsList = document.getElementById('subscriptions-list');
+
+    // 모달 요소
+    const emailModal = document.getElementById('email-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalTabs = document.getElementById('modal-tabs');
+    const tabNegotiate = document.getElementById('tab-negotiate');
+    const tabCancel = document.getElementById('tab-cancel');
+    const emailSubject = document.getElementById('email-subject');
+    const emailBody = document.getElementById('email-body');
+    const copyEmailBtn = document.getElementById('copy-email-btn');
+    const mailtoBtn = document.getElementById('mailto-btn');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+
+    let currentFiles = [];
+    let timerInterval = null;
+    let detectedSubscriptions = [];
+    let activeSubIndex = null;
+
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => e.preventDefault());
+
+    fileInput.addEventListener('click', (e) => e.stopPropagation());
+
+    dropZone.addEventListener('click', (e) => {
+      if (e.target !== removeFileBtn) fileInput.click();
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-active');
+    });
+
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active'));
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-active');
+      if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) handleFiles(fileInput.files);
+    });
+
+    function handleFiles(fileList) {
+      const validFiles = Array.from(fileList).filter(f => f.name.toLowerCase().endsWith('.csv'));
+      if (validFiles.length === 0) {
+        alert('Please upload valid .CSV bank statement files.');
+        return;
+      }
+      if (validFiles.length > MAX_FILES) {
+        alert(`Please select up to ${MAX_FILES} CSV files at once (3 years of statements).`);
+        return;
+      }
+
+      currentFiles = validFiles;
+      const totalKB = (currentFiles.reduce((sum, f) => sum + f.size, 0) / 1024).toFixed(1);
+
+      fileNameDisplay.textContent = currentFiles.length === 1
+        ? currentFiles[0].name
+        : `${currentFiles.length} CSV files selected`;
+      fileSizeDisplay.textContent = `${currentFiles.map(f => f.name).join(', ')} (${totalKB} KB)`;
+
+      uploadPrompt.classList.add('hidden');
+      fileSelected.classList.remove('hidden');
+      fileSelected.classList.add('flex');
+
+      analyzeBtn.disabled = false;
+      analyzeBtn.textContent = currentFiles.length === 1 ? 'Analyze Statement' : `Analyze ${currentFiles.length} Statements`;
+      analyzeBtn.className = 'mt-6 w-full py-3.5 px-6 rounded-xl font-medium text-sm transition-all duration-300 bg-white text-black hover:bg-neutral-200 shadow-[0_0_25px_rgba(255,255,255,0.25)] cursor-pointer';
+      statusBox.classList.add('hidden');
+    }
+
+    removeFileBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentFiles = [];
+      fileInput.value = '';
+      uploadPrompt.classList.remove('hidden');
+      fileSelected.classList.add('hidden');
+      fileSelected.classList.remove('flex');
+
+      analyzeBtn.disabled = true;
+      analyzeBtn.textContent = 'Select CSV files to analyze';
+      analyzeBtn.className = 'mt-6 w-full py-3.5 px-6 rounded-xl font-medium text-sm transition-all duration-300 bg-white/10 text-neutral-500 cursor-not-allowed';
+      statusBox.classList.add('hidden');
+      resultsSection.classList.add('hidden');
+      mainContainer.classList.replace('max-w-3xl', 'max-w-xl');
+    });
+
+    analyzeBtn.addEventListener('click', async () => {
+      if (currentFiles.length === 0) return;
+
+      analyzeBtn.disabled = true;
+      analyzeBtn.textContent = 'Local AI is isolating subscriptions...';
+      statusBox.classList.remove('hidden');
+
+      const minSec = Math.max(5, Math.round(currentFiles.length * 0.6));
+      const maxSec = Math.max(10, Math.round(currentFiles.length * 1.1));
+      const startTime = Date.now();
+
+      statusBox.textContent = `Running Llama 3.1 locally on your MacBook... (~${minSec}–${maxSec}s · 0.0s elapsed)`;
+      timerInterval = setInterval(() => {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        statusBox.textContent = `Running Llama 3.1 locally on your MacBook... (~${minSec}–${maxSec}s · ${elapsed}s elapsed)`;
+      }, 100);
+
+      const formData = new FormData();
+      currentFiles.forEach(file => formData.append('files', file));
+
+      try {
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          body: formData
+        });
+
+        const rawText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch (e) {
+          throw new Error(`Server response error (${response.status}): ${rawText.slice(0, 100)}`);
+        }
+
+        if (!response.ok) throw new Error(data.detail || 'Analysis failed');
+
+        renderDashboard(data);
+        statusBox.classList.add('hidden');
+      } catch (error) {
+        statusBox.textContent = `Error: ${error.message}`;
+      } finally {
+        clearInterval(timerInterval);
+        analyzeBtn.disabled = false;
+        analyzeBtn.textContent = currentFiles.length === 1 ? 'Analyze Statement' : `Analyze ${currentFiles.length} Statements`;
+      }
+    });
+
+    function renderDashboard(data) {
+      detectedSubscriptions = data.subscriptions || [];
+      mainContainer.classList.replace('max-w-xl', 'max-w-3xl');
+      resultsSection.classList.remove('hidden');
+
+      document.getElementById('metric-monthly').textContent = `$${data.total_monthly.toFixed(2)}`;
+      document.getElementById('metric-annual').textContent = `$${data.total_annual.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      document.getElementById('metric-hikes').textContent = data.hike_count > 0 ? `${data.hike_count} Detected` : 'None';
+      document.getElementById('metric-hike-extra').textContent = data.extra_annual_hikes > 0
+        ? `+$${data.extra_annual_hikes.toFixed(2)}/yr extra cost`
+        : 'No stealth increases found';
+      document.getElementById('sub-count-badge').textContent = `${detectedSubscriptions.length} items`;
+
+      subscriptionsList.innerHTML = detectedSubscriptions.map((sub, idx) => {
+        const hikeWhen = sub.hike_date ? ` (${sub.hike_date})` : '';
+        const hikeBadge = sub.price_hike
+          ? `<span class="ml-2.5 text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-white text-black">
+               ↑ Hike${hikeWhen}: $${Number(sub.previous_amount).toFixed(2)} → $${Number(sub.current_amount).toFixed(2)}
+             </span>`
+          : '';
+
+        const billingMeta = sub.frequency === 'Monthly'
+          ? `Monthly · Last billed ${sub.last_billed}`
+          : `${sub.frequency} (~$${Number(sub.monthly_equivalent).toFixed(2)}/mo) · Last billed ${sub.last_billed}`;
+
+        const negotiateBtn = sub.price_hike
+          ? `<button type="button" onclick="openEmailModal(${idx}, 'negotiate')" class="text-[11px] px-2.5 py-1 rounded-lg bg-white text-black font-medium hover:bg-neutral-200 transition">
+               Negotiate
+             </button>`
+          : '';
+
+        return `
+          <div class="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div class="flex items-center flex-wrap gap-y-1">
+                <span class="text-sm font-medium text-white">${sub.name}</span>
+                ${hikeBadge}
+              </div>
+              <p class="text-xs text-neutral-500 mt-1">${billingMeta}</p>
+            </div>
+            <div class="flex items-center justify-between sm:justify-end gap-3">
+              <div class="flex items-center gap-1.5">
+                ${negotiateBtn}
+                <button type="button" onclick="openEmailModal(${idx}, 'cancel')" class="text-[11px] px-2.5 py-1 rounded-lg bg-white/[0.06] border border-white/12 text-neutral-300 hover:text-white hover:bg-white/[0.12] transition">
+                  Cancel
+                </button>
+              </div>
+              <span class="text-base font-medium text-white min-w-[72px] text-right">$${Number(sub.current_amount).toFixed(2)}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function openEmailModal(index, actionType) {
+      activeSubIndex = index;
+      const sub = detectedSubscriptions[index];
+      if (!sub) return;
+
+      emailModal.classList.remove('hidden');
+      copyEmailBtn.textContent = 'Copy Email';
+
+      // 요금 인상 항목인 경우 협상/해지 전환 탭 활성화
+      if (sub.price_hike) {
+        modalTabs.classList.remove('hidden');
+        modalTabs.classList.add('grid');
+        updateTabStyles(actionType);
+      } else {
+        modalTabs.classList.add('hidden');
+        modalTabs.classList.remove('grid');
+      }
+
+      modalTitle.textContent = actionType === 'negotiate'
+        ? `Negotiate ${sub.name} Rate`
+        : `Cancel ${sub.name}`;
+      emailSubject.value = 'Drafting subject with local AI...';
+      emailBody.value = 'Llama 3.1 is writing your request locally... (~2–4s)';
+
+      try {
+        const response = await fetch('/api/draft-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: sub.name,
+            current_amount: sub.current_amount,
+            previous_amount: sub.previous_amount,
+            price_hike: sub.price_hike,
+            hike_date: sub.hike_date,
+            frequency: sub.frequency,
+            action_type: actionType
+          })
+        });
+
+        const draft = await response.json();
+        emailSubject.value = draft.subject;
+        emailBody.value = draft.body;
+        updateMailtoLink();
+      } catch (err) {
+        emailSubject.value = `Request regarding ${sub.name}`;
+        emailBody.value = 'Failed to generate draft. Please try again.';
+      }
+    }
+
+    function updateTabStyles(activeAction) {
+      if (activeAction === 'negotiate') {
+        tabNegotiate.className = 'py-1.5 text-xs font-medium rounded-lg bg-white text-black transition';
+        tabCancel.className = 'py-1.5 text-xs font-medium rounded-lg text-neutral-400 hover:text-white transition';
+      } else {
+        tabCancel.className = 'py-1.5 text-xs font-medium rounded-lg bg-white text-black transition';
+        tabNegotiate.className = 'py-1.5 text-xs font-medium rounded-lg text-neutral-400 hover:text-white transition';
+      }
+    }
+
+    function updateMailtoLink() {
+      const subj = encodeURIComponent(emailSubject.value);
+      const body = encodeURIComponent(emailBody.value);
+      mailtoBtn.href = `mailto:?subject=${subj}&body=${body}`;
+    }
+
+    emailSubject.addEventListener('input', updateMailtoLink);
+    emailBody.addEventListener('input', updateMailtoLink);
+
+    tabNegotiate.addEventListener('click', () => {
+      if (activeSubIndex !== null) openEmailModal(activeSubIndex, 'negotiate');
+    });
+
+    tabCancel.addEventListener('click', () => {
+      if (activeSubIndex !== null) openEmailModal(activeSubIndex, 'cancel');
+    });
+
+    copyEmailBtn.addEventListener('click', async () => {
+      const fullText = `Subject: ${emailSubject.value}\n\n${emailBody.value}`;
+      await navigator.clipboard.writeText(fullText);
+      copyEmailBtn.textContent = '✓ Copied to Clipboard';
+      setTimeout(() => {
+        copyEmailBtn.textContent = 'Copy Email';
+      }, 2000);
+    });
+
+    closeModalBtn.addEventListener('click', () => {
+      emailModal.classList.add('hidden');
+    });
+
+    emailModal.addEventListener('click', (e) => {
+      if (e.target === emailModal) emailModal.classList.add('hidden');
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !emailModal.classList.contains('hidden')) {
+        emailModal.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>

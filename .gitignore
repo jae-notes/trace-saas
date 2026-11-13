@@ -1,0 +1,16 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# macOS System Files
+.DS_Store
+
+# Privacy Guard: Never upload personal bank statement CSVs
+*.csv
+.env
